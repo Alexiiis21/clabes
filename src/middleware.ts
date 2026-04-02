@@ -2,30 +2,28 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(req: NextRequest) {
-  // Solo por si acaso - autenticación básica muy simple
-  const basicAuth = req.headers.get('authorization');
+  const authCookie = req.cookies.get('clabes_auth');
+  const path = req.nextUrl.pathname;
+  
+  const isLoginPage = path.startsWith('/login');
+  const isAuthApi = path.startsWith('/api/auth');
 
-  if (basicAuth) {
-    const authValue = basicAuth.split(' ')[1];
-    const [user, pwd] = atob(authValue).split(':');
-
-    // Cambia esto a tu contraseña preferida (ej: admin/admin123)
-    if (user === 'admin' && pwd === (process.env.ADMIN_PASSWORD || 'neon2026')) {
-      return NextResponse.next();
+  // Si no hay cookie y trata de acceder a rutas protegidas (ni login, ni api/auth públicas)
+  if (!authCookie && !isLoginPage && !isAuthApi) {
+    if (path.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  const url = req.nextUrl;
-  url.pathname = '/api/auth';
+  // Si ya está autenticado e intenta ir al login, redigir al inicio
+  if (authCookie && isLoginPage) {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
 
-  return new NextResponse('Authentication required', {
-    status: 401,
-    headers: {
-      'WWW-Authenticate': 'Basic realm="Secure Area"',
-    },
-  });
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
